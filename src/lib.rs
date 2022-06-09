@@ -2,12 +2,14 @@ mod apply;
 mod resolve_id;
 mod test_runner;
 
-use anyhow::Result;
+use std::path::Path;
+
+use anyhow::{Context, Result};
+pub use apply::planner_test_apply;
 use async_trait::async_trait;
+use glob::Paths;
 use resolve_id::resolve_testcase_id;
 use serde::{Deserialize, Serialize};
-
-pub use apply::planner_test_apply;
 pub use test_runner::planner_test_runner;
 
 /// Describing a test case.
@@ -25,6 +27,7 @@ pub struct TestCase {
 pub struct ParsedTestCase {
     pub id: Option<String>,
     pub desc: Option<String>,
+    pub sql: String,
     pub before_sql: Vec<String>,
     pub test: Vec<String>,
 }
@@ -36,8 +39,18 @@ pub trait PlannerTestRunner {
     async fn run(&mut self, test_case: &ParsedTestCase) -> Result<String>;
 }
 
-pub fn parse_test_case(test: Vec<TestCase>) -> Result<Vec<ParsedTestCase>> {
+pub fn parse_test_cases(test: Vec<TestCase>) -> Result<Vec<ParsedTestCase>> {
     resolve_testcase_id(test)
+}
+
+const SUFFIX: &str = ".yml";
+
+pub fn discover_tests(path: impl AsRef<Path>) -> Result<Paths> {
+    let pattern = format!("**/[!_]*{}", SUFFIX);
+    let path = path.as_ref().join(&pattern);
+    let path = path.to_str().context("non utf-8 path")?;
+    let paths = glob::glob(path).context("failed to discover test")?;
+    Ok(paths)
 }
 
 #[cfg(test)]
@@ -63,7 +76,7 @@ mod tests {
         "#
         .trim();
         let test_case: Vec<TestCase> = serde_yaml::from_str(x).unwrap();
-        let test_case = parse_test_case(test_case).unwrap();
+        let test_case = parse_test_cases(test_case).unwrap();
         assert_eq!(test_case.len(), 3);
         assert_eq!(test_case[2].before_sql.len(), 3);
         assert_eq!(

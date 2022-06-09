@@ -53,6 +53,7 @@ pub fn resolve_testcase_id(testcases: Vec<TestCase>) -> Result<Vec<ParsedTestCas
                 before_sql: before_sql.unwrap_or_default(),
                 id: testcase.id,
                 desc: testcase.desc,
+                sql: testcase.sql,
                 test: testcase.test.unwrap_or_default(),
             })
         })

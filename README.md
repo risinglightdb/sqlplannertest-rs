@@ -41,3 +41,21 @@ Basically, it is like:
 
 And it will generate a file describing the result. Developers can diff the regression
 test result to see what have been changed throughout the process.
+
+## NaiveDB
+
+The naive database system for testing sqlplannertest.
+
+**Update the test cases**
+
+```
+cargo run -p naivedb --bin apply
+```
+
+**Verify the test cases**
+
+```
+cargo test -p naivedb
+# or use nextest
+cargo nextest run -p naivedb
+```
