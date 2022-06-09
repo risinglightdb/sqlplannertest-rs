@@ -94,13 +94,16 @@ where
                     ChangeTag::Insert => ("+", Style::new().green()),
                     ChangeTag::Equal => (" ", Style::new()),
                 };
-                print!(
-                    "{}{} {}{}",
-                    style(Line(change.old_index())).dim(),
-                    style(Line(change.new_index())).dim(),
-                    sty.apply_to(sign).bold(),
-                    sty.apply_to(change)
-                );
+
+                if args.nocapture {
+                    print!(
+                        "{}{} {}{}",
+                        style(Line(change.old_index())).dim(),
+                        style(Line(change.new_index())).dim(),
+                        sty.apply_to(sign).bold(),
+                        sty.apply_to(change)
+                    );
+                }
             }
 
             if generated_result != expected_result {
