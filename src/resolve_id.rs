@@ -54,7 +54,7 @@ pub fn resolve_testcase_id(testcases: Vec<TestCase>) -> Result<Vec<ParsedTestCas
                 id: testcase.id,
                 desc: testcase.desc,
                 sql: testcase.sql,
-                test: testcase.test.unwrap_or_default(),
+                tasks: testcase.tasks.unwrap_or_default(),
             })
         })
         .collect::<Result<Vec<_>>>()

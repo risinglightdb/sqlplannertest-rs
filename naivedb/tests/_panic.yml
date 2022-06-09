@@ -1,0 +1,6 @@
+- sql: |
+    PANIC
+  desc: Test whether panic works
+  tasks:
+  - logical
+  - physical

@@ -19,7 +19,7 @@ Here's an example of test description file:
     SELECT * FROM t1, t2 WHERE t1.v1 = t2.v2;
   desc: Test whether join works correctly.
   before: ["*sql1", "*sql2", "CREATE TABLE t3(v3 int);"]
-  test:
+  tasks:
   - logical
   - physical
 ```
@@ -34,7 +34,7 @@ Basically, it is like:
   - "*test_case_1"           # use *id to reference to another test case
   - "*test_case_2"
   - CREATE TABLE t2(v2 int); # or directly write a SQL here
-  test:                      # run logical and physical test for this case
+  tasks:                      # run logical and physical test for this case
   - logical
   - physical
 ```

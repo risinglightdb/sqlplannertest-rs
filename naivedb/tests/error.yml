@@ -1,0 +1,6 @@
+- sql: |
+    ERROR
+  desc: Test whether error works
+  tasks:
+  - logical
+  - physical

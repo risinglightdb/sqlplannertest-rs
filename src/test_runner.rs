@@ -9,7 +9,9 @@ use similar::{ChangeTag, TextDiff};
 use tokio::runtime::Runtime;
 
 use crate::apply::generate_result;
-use crate::{discover_tests, parse_test_cases, PlannerTestRunner, TestCase, SUFFIX};
+use crate::{
+    discover_tests, parse_test_cases, PlannerTestRunner, TestCase, RESULT_SUFFIX, TEST_SUFFIX,
+};
 
 // Copyright 2022 Armin Ronacher
 struct Line(Option<usize>);
@@ -41,7 +43,10 @@ where
         let filename = path.file_name().context("unable to extract filename")?;
         let testname = filename.to_str().context("unable to convert to string")?;
         tests.push(Test {
-            name: testname.strip_suffix(SUFFIX).unwrap().replace('/', "_"),
+            name: testname
+                .strip_suffix(TEST_SUFFIX)
+                .unwrap()
+                .replace('/', "_"),
             kind: "".into(),
             is_ignored: false,
             is_bench: false,
@@ -70,12 +75,12 @@ where
             let testcases = parse_test_cases(testcases)?;
             let mut generated_result = String::new();
             for testcase in testcases {
-                let runner_result = runner.run(&testcase).await?;
+                let runner_result = runner.run(&testcase).await;
                 generate_result(&testcase, &runner_result, &mut generated_result)?;
             }
             let path = {
                 let mut path = path;
-                path.set_extension("sql");
+                path.set_extension(RESULT_SUFFIX);
                 path
             };
             let expected_result = tokio::fs::read_to_string(&path).await?;

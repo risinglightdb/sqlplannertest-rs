@@ -19,7 +19,7 @@ pub struct TestCase {
     pub desc: Option<String>,
     pub sql: String,
     pub before: Option<Vec<String>>,
-    pub test: Option<Vec<String>>,
+    pub tasks: Option<Vec<String>>,
 }
 
 /// A parsed test case.
@@ -29,24 +29,25 @@ pub struct ParsedTestCase {
     pub desc: Option<String>,
     pub sql: String,
     pub before_sql: Vec<String>,
-    pub test: Vec<String>,
+    pub tasks: Vec<String>,
 }
 
 /// A planner test runner.
 #[async_trait]
-pub trait PlannerTestRunner {
+pub trait PlannerTestRunner: Send {
     /// Run a test case and return the result
     async fn run(&mut self, test_case: &ParsedTestCase) -> Result<String>;
 }
 
-pub fn parse_test_cases(test: Vec<TestCase>) -> Result<Vec<ParsedTestCase>> {
-    resolve_testcase_id(test)
+pub fn parse_test_cases(tests: Vec<TestCase>) -> Result<Vec<ParsedTestCase>> {
+    resolve_testcase_id(tests)
 }
 
-const SUFFIX: &str = ".yml";
+const TEST_SUFFIX: &str = ".yml";
+const RESULT_SUFFIX: &str = "planner.sql";
 
 pub fn discover_tests(path: impl AsRef<Path>) -> Result<Paths> {
-    let pattern = format!("**/[!_]*{}", SUFFIX);
+    let pattern = format!("**/[!_]*{}", TEST_SUFFIX);
     let path = path.as_ref().join(&pattern);
     let path = path.to_str().context("non utf-8 path")?;
     let paths = glob::glob(path).context("failed to discover test")?;
@@ -70,7 +71,7 @@ mod tests {
     SELECT * FROM t1, t2 WHERE t1.v1 = t2.v2;
   desc: "Test whether join works correctly."
   before: ["*sql1", "*sql2", "CREATE TABLE t3(v3 int);"]
-  test:
+  tasks:
     - logical
     - physical
         "#
