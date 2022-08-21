@@ -1,10 +1,10 @@
 use std::fmt;
 use std::future::Future;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Context, Error, Result};
+use anyhow::{anyhow, Context, Result};
 use console::style;
-use libtest_mimic::{run_tests, Arguments, Outcome, Test};
+use libtest_mimic::{Arguments, Failed, Trial};
 use similar::{ChangeTag, TextDiff};
 use tokio::runtime::Runtime;
 
@@ -29,7 +29,7 @@ impl fmt::Display for Line {
 /// Test runner based on libtest-mimic.
 pub fn planner_test_runner<F, Ft, R>(path: impl AsRef<Path>, runner_fn: F) -> Result<()>
 where
-    F: Fn() -> Ft + Send + Sync + 'static,
+    F: Fn() -> Ft + Send + Sync + 'static + Clone,
     Ft: Future<Output = Result<R>> + Send,
     R: PlannerTestRunner,
 {
@@ -42,22 +42,32 @@ where
         let path = entry.context("failed to read glob entry")?;
         let filename = path.file_name().context("unable to extract filename")?;
         let testname = filename.to_str().context("unable to convert to string")?;
-        tests.push(Test {
-            name: testname
+
+        let nocapture = args.nocapture;
+        let runner_fn = runner_fn.clone();
+
+        tests.push(Trial::test(
+            testname
                 .strip_suffix(TEST_SUFFIX)
                 .unwrap()
                 .replace('/', "_"),
-            kind: "".into(),
-            is_ignored: false,
-            is_bench: false,
-            data: path.clone(),
-        });
+            move || run(path, nocapture, runner_fn),
+        ));
     }
 
     if tests.is_empty() {
         return Err(anyhow!("no test discovered"));
     }
 
+    libtest_mimic::run(&args, tests).exit();
+}
+
+fn run<F, Ft, R>(path: PathBuf, nocapture: bool, runner_fn: F) -> Result<(), Failed>
+where
+    F: Fn() -> Ft + Send + Sync + 'static + Clone,
+    Ft: Future<Output = Result<R>> + Send,
+    R: PlannerTestRunner,
+{
     fn build_runtime() -> Runtime {
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -65,58 +75,48 @@ where
             .unwrap()
     }
 
-    run_tests(&args, tests, move |case| {
-        let path = case.data.clone();
-        let runner_fn = &runner_fn;
-        match build_runtime().block_on(async move {
-            let mut runner = runner_fn().await?;
-            let testcases = tokio::fs::read(&path).await?;
-            let testcases: Vec<TestCase> = serde_yaml::from_slice(&testcases)?;
-            let testcases = parse_test_cases(testcases)?;
-            let mut generated_result = String::new();
-            for testcase in testcases {
-                let runner_result = runner.run(&testcase).await;
-                generate_result(&testcase, &runner_result, &mut generated_result)?;
-            }
-            let path = {
-                let mut path = path;
-                path.set_extension(RESULT_SUFFIX);
-                path
+    build_runtime().block_on(async move {
+        let mut runner = runner_fn().await?;
+        let testcases = tokio::fs::read(&path).await?;
+        let testcases: Vec<TestCase> = serde_yaml::from_slice(&testcases)?;
+        let testcases = parse_test_cases(testcases)?;
+        let mut generated_result = String::new();
+        for testcase in testcases {
+            let runner_result = runner.run(&testcase).await;
+            generate_result(&testcase, &runner_result, &mut generated_result)?;
+        }
+        let path = {
+            let mut path = path;
+            path.set_extension(RESULT_SUFFIX);
+            path
+        };
+        let expected_result = tokio::fs::read_to_string(&path).await?;
+
+        let diff = TextDiff::from_lines(&generated_result, &expected_result);
+
+        for change in diff.iter_all_changes() {
+            use console::Style;
+            let (sign, sty) = match change.tag() {
+                ChangeTag::Delete => ("-", Style::new().red()),
+                ChangeTag::Insert => ("+", Style::new().green()),
+                ChangeTag::Equal => (" ", Style::new()),
             };
-            let expected_result = tokio::fs::read_to_string(&path).await?;
 
-            let diff = TextDiff::from_lines(&generated_result, &expected_result);
-
-            for change in diff.iter_all_changes() {
-                use console::Style;
-                let (sign, sty) = match change.tag() {
-                    ChangeTag::Delete => ("-", Style::new().red()),
-                    ChangeTag::Insert => ("+", Style::new().green()),
-                    ChangeTag::Equal => (" ", Style::new()),
-                };
-
-                if args.nocapture {
-                    print!(
-                        "{}{} {}{}",
-                        style(Line(change.old_index())).dim(),
-                        style(Line(change.new_index())).dim(),
-                        sty.apply_to(sign).bold(),
-                        sty.apply_to(change)
-                    );
-                }
+            if nocapture {
+                print!(
+                    "{}{} {}{}",
+                    style(Line(change.old_index())).dim(),
+                    style(Line(change.new_index())).dim(),
+                    sty.apply_to(sign).bold(),
+                    sty.apply_to(change)
+                );
             }
+        }
 
-            if generated_result != expected_result {
-                Err(anyhow!("test failed"))
-            } else {
-                Ok::<_, Error>(())
-            }
-        }) {
-            Ok(_) => Outcome::Passed,
-            Err(err) => Outcome::Failed {
-                msg: Some(format!("{:#}", err)),
-            },
+        if generated_result != expected_result {
+            Err(Failed::without_message())
+        } else {
+            Ok(())
         }
     })
-    .exit();
 }
