@@ -16,7 +16,6 @@ where
     R: PlannerTestRunner + 'static,
 {
     let tests = discover_tests(path)?
-        .into_iter()
         .map(|path| {
             let path = path?;
             let filename = path
