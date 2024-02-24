@@ -48,7 +48,7 @@ const RESULT_SUFFIX: &str = "planner.sql";
 
 pub fn discover_tests(path: impl AsRef<Path>) -> Result<Paths> {
     let pattern = format!("**/[!_]*{}", TEST_SUFFIX);
-    let path = path.as_ref().join(&pattern);
+    let path = path.as_ref().join(pattern);
     let path = path.to_str().context("non utf-8 path")?;
     let paths = glob::glob(path).context("failed to discover test")?;
     Ok(paths)
