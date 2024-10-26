@@ -1,5 +1,6 @@
 use std::future::Future;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Error, Result};
 use console::style;
@@ -29,11 +30,17 @@ where
             Ok::<_, Error>((path, testname))
         })
         .collect::<Result<Vec<_>, _>>()?;
+
+    struct TestResult {
+        testname: String,
+        time: Duration,
+    }
     let test_stream = stream::iter(tests).map(|(path, testname)| {
         let runner_fn = &runner_fn;
         let testname_x = testname.clone();
         async {
             let mut runner = runner_fn().await?;
+            let start = Instant::now();
             tokio::spawn(async move {
                 let testcases = tokio::fs::read(&path).await?;
                 let testcases: Vec<TestCase> = serde_yaml::from_slice(&testcases)?;
@@ -53,7 +60,8 @@ where
                 Ok::<_, Error>(())
             })
             .await??;
-            Ok::<_, Error>(testname)
+            let time = start.elapsed();
+            Ok::<_, Error>(TestResult { testname, time })
         }
         .map_err(|e| (e, testname_x))
     });
@@ -65,7 +73,12 @@ where
     let mut failed_cases = vec![];
     while let Some(item) = test_stream.next().await {
         match item {
-            Ok(name) => println!("{} {}", style("[DONE]").green().bold(), name),
+            Ok(item) => println!(
+                "{} {}, took {} ms",
+                style("[DONE]").green().bold(),
+                item.testname,
+                item.time.as_millis()
+            ),
             Err((e, name)) => {
                 println!("{} {}: {:#}", style("[FAIL]").red().bold(), name, e);
                 failed_cases.push(name);
