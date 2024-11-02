@@ -5,7 +5,7 @@ mod test_runner;
 use std::path::Path;
 
 use anyhow::{Context, Result};
-pub use apply::planner_test_apply;
+pub use apply::{planner_test_apply, planner_test_apply_with_options, PlannerTestApplyOptions};
 use async_trait::async_trait;
 use glob::Paths;
 use resolve_id::resolve_testcase_id;

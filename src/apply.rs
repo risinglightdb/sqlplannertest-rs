@@ -10,7 +10,25 @@ use crate::{
     discover_tests, parse_test_cases, ParsedTestCase, PlannerTestRunner, TestCase, RESULT_SUFFIX,
 };
 
+#[derive(Default)]
+pub struct PlannerTestApplyOptions {
+    pub serial: bool,
+}
+
 pub async fn planner_test_apply<F, Ft, R>(path: impl AsRef<Path>, runner_fn: F) -> Result<()>
+where
+    F: Fn() -> Ft + Send + Sync + 'static,
+    Ft: Future<Output = Result<R>> + Send,
+    R: PlannerTestRunner + 'static,
+{
+    planner_test_apply_with_options(path, runner_fn, PlannerTestApplyOptions::default()).await
+}
+
+pub async fn planner_test_apply_with_options<F, Ft, R>(
+    path: impl AsRef<Path>,
+    runner_fn: F,
+    options: PlannerTestApplyOptions,
+) -> Result<()>
 where
     F: Fn() -> Ft + Send + Sync + 'static,
     Ft: Future<Output = Result<R>> + Send,
@@ -66,8 +84,13 @@ where
         .map_err(|e| (e, testname_x))
     });
 
-    let mut test_stream =
-        test_stream.buffer_unordered(std::thread::available_parallelism()?.into());
+    let mut test_stream = if options.serial {
+        test_stream.then(|x| x).boxed()
+    } else {
+        test_stream
+            .buffer_unordered(std::thread::available_parallelism()?.into())
+            .boxed()
+    };
 
     let mut test_discovered = false;
     let mut failed_cases = vec![];
