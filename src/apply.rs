@@ -10,7 +10,7 @@ use crate::{
     discover_tests, parse_test_cases, ParsedTestCase, PlannerTestRunner, TestCase, RESULT_SUFFIX,
 };
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct PlannerTestApplyOptions {
     pub serial: bool,
 }

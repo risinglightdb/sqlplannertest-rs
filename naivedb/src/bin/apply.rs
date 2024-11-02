@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use anyhow::Result;
-use sqlplannertest::PlannerTestApplyOptions;
 
 #[tokio::main]
 async fn main() -> Result<()> {
