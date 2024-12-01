@@ -1,0 +1,1 @@
+CREATE TABLE t3(v3 int);

@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 
 use crate::{ParsedTestCase, TestCase};
 
-pub fn resolve_testcase_id(testcases: Vec<TestCase>) -> Result<Vec<ParsedTestCase>> {
+pub fn resolve_testcase_id(
+    base_path: impl AsRef<Path>,
+    testcases: Vec<TestCase>,
+) -> Result<Vec<ParsedTestCase>> {
     let mut testcases_with_ids = HashMap::new();
     for testcase in &testcases {
         if let Some(id) = &testcase.id {
@@ -33,14 +36,18 @@ pub fn resolve_testcase_id(testcases: Vec<TestCase>) -> Result<Vec<ParsedTestCas
                 Some(
                     before
                         .iter()
-                        .map(|id| {
-                            if let Some(id) = id.strip_prefix('*') {
+                        .map(|maybe_sql| {
+                            if let Some(id) = maybe_sql.strip_prefix('*') {
                                 testcases_with_ids
                                     .get(id)
                                     .map(|case| case.sql.clone())
                                     .ok_or_else(|| anyhow!("failed to resolve {}: not found", id))
+                            } else if let Some(include) = maybe_sql.strip_prefix("include_sql:") {
+                                let path = base_path.as_ref().join(include);
+                                std::fs::read_to_string(&path)
+                                    .with_context(|| format!("failed to read: {}", include))
                             } else {
-                                Ok(id.to_string())
+                                Ok(maybe_sql.to_string())
                             }
                         })
                         .collect::<Result<Vec<_>>>()?,
@@ -54,6 +61,7 @@ pub fn resolve_testcase_id(testcases: Vec<TestCase>) -> Result<Vec<ParsedTestCas
                 id: testcase.id,
                 desc: testcase.desc,
                 sql: testcase.sql,
+                no_capture: testcase.no_capture == Some(true),
                 tasks: testcase.tasks.unwrap_or_default(),
             })
         })

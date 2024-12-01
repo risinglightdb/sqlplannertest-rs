@@ -7,7 +7,15 @@
 - sql: |
     SELECT * FROM t1, t2 WHERE t1.v1 = t2.v2;
   desc: Test whether join works correctly.
-  before: ["*sql1", "*sql2", "CREATE TABLE t3(v3 int);"]
+  before: ["include_sql:include.sql", "*sql1", "*sql2", "CREATE TABLE t3(v3 int);"]
+  tasks:
+  - logical
+  - physical
+- sql: |
+    SELECT * FROM t1, t2 WHERE t1.v1 = t2.v2;
+  desc: Test whether join works correctly.
+  before: ["include_sql:include.sql", "*sql1", "*sql2", "CREATE TABLE t3(v3 int);"]
+  no_capture: true
   tasks:
   - logical
   - physical

@@ -79,11 +79,20 @@ where
         let mut runner = runner_fn().await?;
         let testcases = tokio::fs::read(&path).await?;
         let testcases: Vec<TestCase> = serde_yaml::from_slice(&testcases)?;
-        let testcases = parse_test_cases(testcases)?;
+        let testcases = parse_test_cases(
+            {
+                let mut path = path.clone();
+                path.pop();
+                path
+            },
+            testcases,
+        )?;
         let mut generated_result = String::new();
         for testcase in testcases {
             let runner_result = runner.run(&testcase).await;
-            generate_result(&testcase, &runner_result, &mut generated_result)?;
+            if !testcase.no_capture {
+                generate_result(&testcase, &runner_result, &mut generated_result)?;
+            }
         }
         let path = {
             let mut path = path;
