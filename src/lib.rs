@@ -19,6 +19,7 @@ pub struct TestCase {
     pub desc: Option<String>,
     pub sql: String,
     pub before: Option<Vec<String>>,
+    pub no_capture: Option<bool>,
     pub tasks: Option<Vec<String>>,
 }
 
@@ -29,6 +30,7 @@ pub struct ParsedTestCase {
     pub desc: Option<String>,
     pub sql: String,
     pub before_sql: Vec<String>,
+    pub no_capture: bool,
     pub tasks: Vec<String>,
 }
 
@@ -39,8 +41,11 @@ pub trait PlannerTestRunner: Send {
     async fn run(&mut self, test_case: &ParsedTestCase) -> Result<String>;
 }
 
-pub fn parse_test_cases(tests: Vec<TestCase>) -> Result<Vec<ParsedTestCase>> {
-    resolve_testcase_id(tests)
+pub fn parse_test_cases(
+    base_path: impl AsRef<Path>,
+    tests: Vec<TestCase>,
+) -> Result<Vec<ParsedTestCase>> {
+    resolve_testcase_id(base_path, tests)
 }
 
 const TEST_SUFFIX: &str = ".yml";
@@ -77,7 +82,7 @@ mod tests {
         "#
         .trim();
         let test_case: Vec<TestCase> = serde_yaml::from_str(x).unwrap();
-        let test_case = parse_test_cases(test_case).unwrap();
+        let test_case = parse_test_cases("", test_case).unwrap();
         assert_eq!(test_case.len(), 3);
         assert_eq!(test_case[2].before_sql.len(), 3);
         assert_eq!(
