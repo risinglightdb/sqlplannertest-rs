@@ -1,0 +1,7 @@
+- sql: |
+    SELECT * FROM t1;
+  desc: Test whether select stmt works correctly.
+  before: ["CREATE TABLE t1(v1 int);"]
+  tasks:
+    - logical
+    - physical

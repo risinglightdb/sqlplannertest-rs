@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 pub use apply::{planner_test_apply, planner_test_apply_with_options, PlannerTestApplyOptions};
 use async_trait::async_trait;
 use glob::Paths;
+use itertools::Itertools;
 use resolve_id::resolve_testcase_id;
 use serde::{Deserialize, Serialize};
 pub use test_runner::planner_test_runner;
@@ -51,12 +52,51 @@ pub fn parse_test_cases(
 const TEST_SUFFIX: &str = ".yml";
 const RESULT_SUFFIX: &str = "planner.sql";
 
-pub fn discover_tests(path: impl AsRef<Path>) -> Result<Paths> {
-    let pattern = format!("**/[!_]*{}", TEST_SUFFIX);
-    let path = path.as_ref().join(pattern);
-    let path = path.to_str().context("non utf-8 path")?;
-    let paths = glob::glob(path).context("failed to discover test")?;
-    Ok(paths)
+pub fn discover_tests(path: impl AsRef<Path>) -> Result<impl Iterator<Item = glob::GlobResult>> {
+    discover_tests_with_selections(path, &[])
+}
+
+pub fn discover_tests_with_selections(
+    path: impl AsRef<Path>,
+    selections: &[String],
+) -> Result<impl Iterator<Item = glob::GlobResult>> {
+    let patterns = mk_patterns(&path, selections);
+    let paths: Vec<Paths> = patterns
+        .into_iter()
+        .map(|pattern| glob::glob(&pattern).context("input pattern is invalid"))
+        .try_collect()?;
+
+    Ok(paths.into_iter().flatten())
+}
+
+/// Make glob patterns based on `selections`.
+///
+/// If `selections` is empty, returns the glob pattern that select all tests within `path`.
+/// Otherwise returns the glob pattterns that matches the selected test modules or files.
+fn mk_patterns(path: impl AsRef<Path>, selections: &[String]) -> Vec<String> {
+    let mk_pattern = |glob: String| {
+        let path = path.as_ref().join(glob);
+        path.to_str().expect("non utf-8 path").to_string()
+    };
+
+    if selections.is_empty() {
+        // Select all tests
+        return vec![mk_pattern(format!("**/[!_]*{}", TEST_SUFFIX))];
+    }
+
+    // Select matching tests.
+    selections
+        .iter()
+        .flat_map(|s| {
+            let path_segment = s.replace("::", "/");
+            // e.g. tests/<..>/path_segment.yml
+            let file_match = mk_pattern(format!("**/{path_segment}{}", TEST_SUFFIX));
+            // Module match, needs to start at the top level.
+            // e.g. tests/path_segment/<..>/<some>.yml
+            let module_match = mk_pattern(format!("{path_segment}/**/[!_]*{}", TEST_SUFFIX));
+            std::iter::once(file_match).chain(std::iter::once(module_match))
+        })
+        .collect()
 }
 
 #[cfg(test)]

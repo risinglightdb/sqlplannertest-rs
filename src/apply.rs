@@ -7,12 +7,15 @@ use console::style;
 use futures_util::{stream, StreamExt, TryFutureExt};
 
 use crate::{
-    discover_tests, parse_test_cases, ParsedTestCase, PlannerTestRunner, TestCase, RESULT_SUFFIX,
+    discover_tests_with_selections, parse_test_cases, ParsedTestCase, PlannerTestRunner, TestCase,
+    RESULT_SUFFIX,
 };
 
 #[derive(Default, Clone)]
 pub struct PlannerTestApplyOptions {
     pub serial: bool,
+    /// A selection of test modules or files.
+    pub selections: Vec<String>,
 }
 
 pub async fn planner_test_apply<F, Ft, R>(path: impl AsRef<Path>, runner_fn: F) -> Result<()>
@@ -25,7 +28,7 @@ where
 }
 
 pub async fn planner_test_apply_with_options<F, Ft, R>(
-    path: impl AsRef<Path>,
+    tests_dir: impl AsRef<Path>,
     runner_fn: F,
     options: PlannerTestApplyOptions,
 ) -> Result<()>
@@ -34,14 +37,14 @@ where
     Ft: Future<Output = Result<R>> + Send,
     R: PlannerTestRunner + 'static,
 {
-    let tests = discover_tests(path)?
+    let tests = discover_tests_with_selections(&tests_dir, &options.selections)?
         .map(|path| {
             let path = path?;
-            let filename = path
-                .file_name()
-                .context("unable to extract filename")?
-                .to_os_string();
-            let testname = filename
+            let relative_path = path
+                .strip_prefix(&tests_dir)
+                .context("unable to relative path")?
+                .as_os_str();
+            let testname = relative_path
                 .to_str()
                 .context("unable to convert to string")?
                 .to_string();
