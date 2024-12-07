@@ -1,3 +1,4 @@
 - sql: |
     CREATE TABLE t1(v1 int);
   desc: Test whether select stmt works correctly.
+  
