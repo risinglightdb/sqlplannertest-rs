@@ -87,7 +87,7 @@ fn mk_patterns(path: impl AsRef<Path>, selections: &[String]) -> Vec<String> {
     // Select matching tests.
     selections
         .iter()
-        .map(|s| {
+        .flat_map(|s| {
             let path_segment = s.replace("::", "/");
             // e.g. tests/<..>/path_segment.yml
             let file_match = mk_pattern(format!("**/{path_segment}{}", TEST_SUFFIX));
@@ -96,7 +96,6 @@ fn mk_patterns(path: impl AsRef<Path>, selections: &[String]) -> Vec<String> {
             let module_match = mk_pattern(format!("{path_segment}/**/[!_]*{}", TEST_SUFFIX));
             std::iter::once(file_match).chain(std::iter::once(module_match))
         })
-        .flatten()
         .collect()
 }
 
