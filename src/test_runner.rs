@@ -27,21 +27,26 @@ impl fmt::Display for Line {
 // End Copyright 2022 Armin Ronacher
 
 /// Test runner based on libtest-mimic.
-pub fn planner_test_runner<F, Ft, R>(path: impl AsRef<Path>, runner_fn: F) -> Result<()>
+pub fn planner_test_runner<F, Ft, R>(tests_dir: impl AsRef<Path>, runner_fn: F) -> Result<()>
 where
     F: Fn() -> Ft + Send + Sync + 'static + Clone,
     Ft: Future<Output = Result<R>> + Send,
     R: PlannerTestRunner,
 {
-    let paths = discover_tests(path)?;
+    let paths = discover_tests(&tests_dir)?;
 
     let args = Arguments::from_args();
 
     let mut tests = vec![];
     for entry in paths {
         let path = entry.context("failed to read glob entry")?;
-        let filename = path.file_name().context("unable to extract filename")?;
-        let testname = filename.to_str().context("unable to convert to string")?;
+        let relative_path = path
+            .strip_prefix(&tests_dir)
+            .context("failed to extract relative path")?
+            .as_os_str();
+        let testname = relative_path
+            .to_str()
+            .context("unable to convert to string")?;
 
         let nocapture = args.nocapture;
         let runner_fn = runner_fn.clone();
@@ -50,7 +55,7 @@ where
             testname
                 .strip_suffix(TEST_SUFFIX)
                 .unwrap()
-                .replace('/', "_"),
+                .replace('/', "::"),
             move || run(path, nocapture, runner_fn),
         ));
     }
