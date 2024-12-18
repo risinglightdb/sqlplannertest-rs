@@ -1,6 +1,6 @@
 [package]
 name = "sqlplannertest"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 description = "A yaml-based SQL planner test framework."
 license = "MIT OR Apache-2.0"
@@ -22,6 +22,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
 similar = "2"
 tokio = { version = "1", features = ["rt", "fs"] }
+tracing = "0.1"
 
 [workspace]
 members = ["naivedb"]
