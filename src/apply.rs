@@ -80,8 +80,15 @@ where
                         testcases,
                     )?;
                     let mut generated_result = String::new();
-                    for testcase in testcases {
-                        let runner_result = runner.run(&testcase).await;
+                    for (idx, testcase) in testcases.into_iter().enumerate() {
+                        let runner_result = runner
+                            .run(&testcase)
+                            .instrument(if let Some(ref id) = testcase.id {
+                                info_span!("testcase", id = id)
+                            } else {
+                                info_span!("testcase", idx = idx)
+                            })
+                            .await;
                         if !testcase.no_capture {
                             generate_result(&testcase, &runner_result, &mut generated_result)?;
                         }
@@ -95,7 +102,7 @@ where
 
                     Ok::<_, Error>(())
                 }
-                .instrument(info_span!("planner_test", testname = testname.as_str())),
+                .instrument(info_span!("file", testname = testname.as_str())),
             )
             .await
             .with_context(|| format!("when joining tokio task for testname={testname}"))?
