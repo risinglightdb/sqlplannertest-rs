@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Context, Error, Result};
 use console::style;
 use futures_util::{stream, StreamExt, TryFutureExt};
+use tracing::{info_span, Instrument};
 
 use crate::{
     discover_tests_with_selections, parse_test_cases, ParsedTestCase, PlannerTestRunner, TestCase,
@@ -59,37 +60,46 @@ where
     let test_stream = stream::iter(tests).map(|(path, testname)| {
         let runner_fn = &runner_fn;
         let testname_x = testname.clone();
+        let testname_y = testname.clone();
         async {
             let mut runner = runner_fn().await?;
             let start = Instant::now();
-            tokio::spawn(async move {
-                let testcases = tokio::fs::read(&path).await?;
-                let testcases: Vec<TestCase> = serde_yaml::from_slice(&testcases)?;
-                let testcases = parse_test_cases(
-                    {
-                        let mut path = path.clone();
-                        path.pop();
-                        path
-                    },
-                    testcases,
-                )?;
-                let mut generated_result = String::new();
-                for testcase in testcases {
-                    let runner_result = runner.run(&testcase).await;
-                    if !testcase.no_capture {
-                        generate_result(&testcase, &runner_result, &mut generated_result)?;
+            tokio::spawn(
+                async move {
+                    if options.serial {
+                        println!("{} {}", style("[RUN]").yellow().bold(), &testname_y);
                     }
-                }
-                let path = {
-                    let mut path = path;
-                    path.set_extension(RESULT_SUFFIX);
-                    path
-                };
-                tokio::fs::write(&path, generated_result).await?;
+                    let testcases = tokio::fs::read(&path).await?;
+                    let testcases: Vec<TestCase> = serde_yaml::from_slice(&testcases)?;
+                    let testcases = parse_test_cases(
+                        {
+                            let mut path = path.clone();
+                            path.pop();
+                            path
+                        },
+                        testcases,
+                    )?;
+                    let mut generated_result = String::new();
+                    for testcase in testcases {
+                        let runner_result = runner.run(&testcase).await;
+                        if !testcase.no_capture {
+                            generate_result(&testcase, &runner_result, &mut generated_result)?;
+                        }
+                    }
+                    let path = {
+                        let mut path = path;
+                        path.set_extension(RESULT_SUFFIX);
+                        path
+                    };
+                    tokio::fs::write(&path, generated_result).await?;
 
-                Ok::<_, Error>(())
-            })
-            .await??;
+                    Ok::<_, Error>(())
+                }
+                .instrument(info_span!("planner_test", testname = testname.as_str())),
+            )
+            .await
+            .with_context(|| format!("when joining tokio task for testname={testname}"))?
+            .with_context(|| format!("when processing testname={testname}"))?;
             let time = start.elapsed();
             Ok::<_, Error>(TestResult { testname, time })
         }
